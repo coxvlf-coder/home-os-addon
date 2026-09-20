@@ -1,0 +1,51 @@
+# =====================================================================
+# HOME OS — add-on do Home Assistant
+#
+# Um HA Green corre HAOS, um sistema apliance: nao ha systemd onde
+# registar um servico. A unica forma de por o agente a correr ao lado do
+# Home Assistant e como add-on, que o Supervisor gere como container.
+#
+# `hassio_api` + `homeassistant_api` dao ao container o `SUPERVISOR_TOKEN`
+# no ambiente, e e assim que o agente autentica em
+# ws://supervisor/core/websocket sem que ninguem escreva um token a mao.
+#
+# CUIDADO COM CHAVES A MAIS. A primeira versao deste ficheiro tinha
+# `entity_allowlist` ao nivel da raiz em vez de dentro de `options`, e
+# `ports: {}` sem porta nenhuma. O Supervisor rejeitou o add-on em
+# SILENCIO -- nao aparece na loja, e `ha addons install` responde "does
+# not exist in the store", que parece um problema de caminho e nao de
+# sintaxe. Nao acrescentar chaves fora das que o schema do Supervisor
+# reconhece.
+# =====================================================================
+name: Home OS Agent
+version: "0.2.0"
+slug: homeos_agent
+description: Recolhe eventos e correccoes humanas do Home Assistant para o Home OS
+arch:
+  - aarch64
+  - amd64
+init: false
+hassio_api: true
+homeassistant_api: true
+options:
+  home_id: ""
+  api_key: ""
+  cloud_url: ""
+  entity_allowlist: []
+  entity_denylist:
+    - "camera."
+    - "media_player."
+    - "update."
+    - "button."
+    - "tts."
+    - "stt."
+    - "conversation."
+    - "todo."
+schema:
+  home_id: str
+  api_key: password
+  cloud_url: url
+  entity_allowlist:
+    - str?
+  entity_denylist:
+    - str?
