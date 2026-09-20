@@ -151,7 +151,18 @@ class Config:
         # Supervisor injecta-o no ambiente. Poe-lo nas opcoes obrigaria a
         # guardar um segredo em texto no ficheiro de configuracao do
         # add-on, visivel na UI do Home Assistant.
-        raw.setdefault("ha_token", os.environ.get("SUPERVISOR_TOKEN", ""))
+        #
+        # DUAS VARIAVEIS, porque o nome mudou: `HASSIO_TOKEN` era a antiga
+        # e continua a ser injectada por compatibilidade em algumas
+        # versoes; `SUPERVISOR_TOKEN` e a actual. Tentar as duas custa uma
+        # linha e evita um `auth_invalid` que nao diz qual delas faltou.
+        if not raw.get("ha_token"):
+            for var in ("SUPERVISOR_TOKEN", "HASSIO_TOKEN"):
+                if os.environ.get(var):
+                    raw["ha_token"] = os.environ[var]
+                    break
+            else:
+                raw["ha_token"] = ""
 
         # Opcoes que o Supervisor acrescenta e que nao sao nossas (ex.:
         # `log_level` do schema do add-on) nao podem rebentar o arranque.
@@ -848,6 +859,18 @@ def main() -> None:
         format="%(asctime)s %(levelname)-7s %(message)s")
     cfg = Config.load()
     log.info("Home OS agent — home_id=%s", cfg.home_id)
+
+    # DIAGNOSTICO DE ARRANQUE. Um `auth_invalid` do Home Assistant nao
+    # distingue "token errado" de "token vazio" de "URL errado", e sem
+    # estas tres linhas cada hipotese custa um ciclo de publicar, instalar
+    # e esperar. O token nunca e impresso -- so o comprimento.
+    log.info("HA em %s", cfg.ha_url)
+    log.info("token do HA: %s",
+             f"{len(cfg.ha_token)} caracteres" if cfg.ha_token else "AUSENTE (vazio)")
+    disponiveis = sorted(k for k in os.environ
+                         if "TOKEN" in k.upper() or k.startswith(("HASSIO", "SUPERVISOR")))
+    log.info("variaveis de ambiente relevantes: %s",
+             ", ".join(disponiveis) if disponiveis else "NENHUMA")
     asyncio.run(Agent(cfg).run())
 
 
