@@ -1,0 +1,6 @@
+# Imagens base explicitas. Sem este ficheiro o Supervisor escolhe sozinho,
+# e a escolha varia com a versao -- uma base Debian em vez de Alpine faria
+# o `apk` do Dockerfile falhar sem explicacao util.
+build_from:
+  aarch64: ghcr.io/home-assistant/aarch64-base:latest
+  amd64: ghcr.io/home-assistant/amd64-base:latest
