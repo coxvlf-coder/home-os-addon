@@ -94,6 +94,37 @@ def attrs_relevantes(estado: dict | None) -> dict:
             if k in ATTRS_RELEVANTES}
 
 
+def _token_do_supervisor() -> str:
+    """
+    O token que o Supervisor injecta, procurado nos dois sitios onde ele
+    pode estar e sob os dois nomes que ja teve.
+
+    `HASSIO_TOKEN` era o nome antigo e continua a ser injectado nalgumas
+    versoes; `SUPERVISOR_TOKEN` e o actual.
+
+    O segundo sitio existe por causa do s6-overlay v3: o `/init` RETIRA o
+    ambiente do container antes de executar o comando e guarda-o em
+    ficheiros dentro de /run/s6/container_environment/. Um processo que
+    nao passe pelo `with-contenv` nao ve variavel nenhuma -- medido em
+    Coppet, o agente arrancou e reportou "variaveis relevantes: NENHUMA".
+    O `run.sh` ja repoe o ambiente, e isto e a rede de seguranca para o
+    caso de alguem mudar o arranque outra vez.
+    """
+    for var in ("SUPERVISOR_TOKEN", "HASSIO_TOKEN"):
+        if os.environ.get(var):
+            return os.environ[var]
+    for var in ("SUPERVISOR_TOKEN", "HASSIO_TOKEN"):
+        caminho = Path("/run/s6/container_environment") / var
+        try:
+            valor = caminho.read_text().strip()
+            if valor:
+                log.info("token lido de %s", caminho)
+                return valor
+        except OSError:
+            continue
+    return ""
+
+
 @dataclass
 class Config:
     home_id: str
@@ -157,12 +188,7 @@ class Config:
         # versoes; `SUPERVISOR_TOKEN` e a actual. Tentar as duas custa uma
         # linha e evita um `auth_invalid` que nao diz qual delas faltou.
         if not raw.get("ha_token"):
-            for var in ("SUPERVISOR_TOKEN", "HASSIO_TOKEN"):
-                if os.environ.get(var):
-                    raw["ha_token"] = os.environ[var]
-                    break
-            else:
-                raw["ha_token"] = ""
+            raw["ha_token"] = _token_do_supervisor()
 
         # Opcoes que o Supervisor acrescenta e que nao sao nossas (ex.:
         # `log_level` do schema do add-on) nao podem rebentar o arranque.
@@ -871,6 +897,18 @@ def main() -> None:
                          if "TOKEN" in k.upper() or k.startswith(("HASSIO", "SUPERVISOR")))
     log.info("variaveis de ambiente relevantes: %s",
              ", ".join(disponiveis) if disponiveis else "NENHUMA")
+
+    # MORRER ALTO EM VEZ DE TENTAR PARA SEMPRE.
+    # Sem token nao ha ligacao possivel ao Home Assistant, e o que o
+    # agente fazia era entrar em backoff infinito -- a continuar a enviar
+    # heartbeats VAZIOS para a nuvem, que e o pior dos mundos: o painel
+    # dizia `online` enquanto nao se recolhia um unico evento. Um add-on
+    # que morre no arranque poe-se a vermelho na UI e diz porque.
+    if not cfg.ha_token:
+        log.error("sem token para o Home Assistant — o agente nao pode recolher nada.")
+        log.error("Num add-on: verificar `hassio_api` e `homeassistant_api` no config.yaml.")
+        log.error("Fora de um add-on: pôr `ha_token` na configuracao.")
+        raise SystemExit(1)
     asyncio.run(Agent(cfg).run())
 
 

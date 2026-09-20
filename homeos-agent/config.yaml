@@ -18,7 +18,7 @@
 # reconhece.
 # =====================================================================
 name: Home OS Agent
-version: "0.2.3"
+version: "0.2.4"
 slug: homeos_agent
 description: Recolhe eventos e correccoes humanas do Home Assistant para o Home OS
 arch:
